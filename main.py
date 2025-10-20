@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image, ImageEnhance
 import os
 import time
+import argparse
 
 # ASCII chars from dark to light
 ASCII_CHARS = "$@B%8&WM#*oahkbdpqwmZ0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,\"^`'. "
@@ -23,10 +24,10 @@ def to_grayscale(image):
 def pixel_to_ascii(pixel_value):
     return ASCII_CHARS[pixel_value * len(ASCII_CHARS) // 256]
 
-def frame_to_ascii(frame, new_width=100):
+def frame_to_ascii(frame, new_width=100, sharpness=1.8):
     image = Image.fromarray(frame)
     image = resize_image(image, new_width)
-    image = enhance_sharpness(image, 20)
+    image = enhance_sharpness(image, sharpness)
     gray_image = to_grayscale(image)
 
     pixels = gray_image.getdata()
@@ -42,37 +43,54 @@ def frame_to_ascii(frame, new_width=100):
 def clear_terminal():
     os.system('cls' if os.name == 'nt' else 'clear')
 
-def output_to_console(frame, ascii_frame):
+def output_to_console(ascii_frame, show_cam=False, frame=None):
     clear_terminal()
-
-    # Output the ASCII
     print(ascii_frame)
+    
+    if show_cam and frame is not None:
+        cv2.imshow("Webcam Feed", frame)
 
-    # Output the WebCam
-    # cv2.imshow("Webcam Feed", frame)
-
-def webcam_to_ascii(real_time=False, new_width=100):
-    # Open webcam
+def webcam_to_ascii(new_width=100, sharpness=1.8, fps=30, show_cam=False):
     cap = cv2.VideoCapture(0)
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    if not cap.isOpened():
+        print("Error: Could not open webcam.")
+        return
 
-        # Convert the frame to ASCII
-        ascii_frame = frame_to_ascii(frame, new_width)
+    frame_delay = 1.0 / fps
 
-        output_to_console(frame, ascii_frame)
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-        time.sleep(0.033)  # ~30 frames per second (adjust this value to change frame rate)
+            ascii_frame = frame_to_ascii(frame, new_width=new_width, sharpness=sharpness)
+            output_to_console(ascii_frame, show_cam=show_cam, frame=frame)
 
-        # Break the loop on pressing 'q'
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+            time.sleep(frame_delay)
 
-    cap.release()
-    cv2.destroyAllWindows()
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
+
+def main():
+    parser = argparse.ArgumentParser(description="Webcam to ASCII Art (Live Terminal Output)")
+    parser.add_argument('--width', type=int, default=100, help='Output ASCII width')
+    parser.add_argument('--sharpness', type=float, default=1.8, help='Sharpness enhancement factor')
+    parser.add_argument('--fps', type=int, default=30, help='Frames per second')
+    parser.add_argument('--show-cam', action='store_true', help='Show the raw webcam feed using OpenCV window')
+
+    args = parser.parse_args()
+
+    webcam_to_ascii(
+        new_width=args.width,
+        sharpness=args.sharpness,
+        fps=args.fps,
+        show_cam=args.show_cam
+    )
 
 if __name__ == "__main__":
-    webcam_to_ascii(real_time=True, new_width=120)  # Adjust width as needed
+    main()
